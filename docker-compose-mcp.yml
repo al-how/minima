@@ -12,7 +12,7 @@ services:
       - 6334
       - 6335
     volumes:
-      - ./qdrant_data:/qdrant/storage
+      - F:/minima/qdrant_data:/qdrant/storage
     environment:
       QDRANT__LOG_LEVEL: "INFO"
 
@@ -26,7 +26,7 @@ services:
     volumes:
       - ${LOCAL_FILES_PATH}:/usr/src/app/local_files/
       - ./indexer:/usr/src/app
-      - ./indexer_data:/indexer/storage
+      - F:/minima/indexer_data:/indexer/storage
     ports:
       - 8001:8000
     environment:

@@ -18,6 +18,7 @@ local_files/
 qdrant_data/
 indexer_data/
 ollama/
+docs/
 
 *.db
 .envrc

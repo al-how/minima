@@ -4,6 +4,7 @@ import asyncio
 import logging
 from indexer import Indexer
 from concurrent.futures import ThreadPoolExecutor
+from ragignore_utils import load_ragignore, should_ignore_path
 
 logger = logging.getLogger(__name__)
 executor = ThreadPoolExecutor()
@@ -14,14 +15,29 @@ AVAILABLE_EXTENSIONS = [".pdf", ".xls", "xlsx", ".doc", ".docx", ".txt", ".md", 
 
 async def crawl_loop(async_queue):
     logger.info(f"Starting crawl loop with path: {CONTAINER_PATH}")
+    
+    # Load .ragignore patterns
+    ignore_patterns = load_ragignore(CONTAINER_PATH)
+    if ignore_patterns:
+        logger.info(f"Loaded {len(ignore_patterns)} patterns from .ragignore")
+    
     existing_file_paths: list[str] = []
-    for root, _, files in os.walk(CONTAINER_PATH):
+    for root, dirs, files in os.walk(CONTAINER_PATH):
+        # Filter directories that should be ignored
+        dirs[:] = [d for d in dirs if not should_ignore_path(os.path.join(root, d), ignore_patterns)]
         logger.info(f"Processing folder: {root}")
         for file in files:
+            path = os.path.join(root, file)
+            
+            # Skip files that match ignore patterns
+            if should_ignore_path(path, ignore_patterns):
+                logger.info(f"Skipping ignored file: {path}")
+                continue
+                
+            # Skip files with unsupported extensions
             if not any(file.endswith(ext) for ext in AVAILABLE_EXTENSIONS):
                 logger.info(f"Skipping file: {file}")
                 continue
-            path = os.path.join(root, file)
             message = {
                 "path": path,
                 "file_id": str(uuid.uuid4()),

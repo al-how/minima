@@ -81,17 +81,23 @@ async def call_tool(name, arguments: dict) -> list[TextContent]:
         logging.error("Context is required")
         raise McpError(INVALID_PARAMS, "Context is required")
 
-    output = await request_data(context)
-    if "error" in output:
-        logging.error(output["error"])
-        raise McpError(INTERNAL_ERROR, output["error"])
-    
-    logging.info(f"Get prompt: {output}")    
-    output = output['result']['output']
-    #links = output['result']['links']
-    result = []
-    result.append(TextContent(type="text", text=output))
-    return result
+    try:
+        output = await request_data(context)
+        if "error" in output:
+            logging.error(output["error"])
+            raise McpError(INTERNAL_ERROR, output["error"])
+        
+        logging.info(f"Get prompt: {output}")    
+        output_text = output['result']['output']
+        # Handle potential Unicode characters
+        output_text = output_text.encode('utf-8', errors='replace').decode('utf-8')
+        
+        result = []
+        result.append(TextContent(type="text", text=output_text))
+        return result
+    except Exception as e:
+        logging.error(f"Error processing tool call: {str(e)}")
+        raise McpError(INTERNAL_ERROR, f"Error processing tool call: {str(e)}")
     
 @server.get_prompt()
 async def get_prompt(name: str, arguments: dict | None) -> GetPromptResult:
@@ -101,43 +107,55 @@ async def get_prompt(name: str, arguments: dict | None) -> GetPromptResult:
         
     context = arguments["text"]
 
-    output = await request_data(context)
-    if "error" in output:
-        error = output["error"]
-        logging.error(error)
+    try:
+        output = await request_data(context)
+        if "error" in output:
+            error = output["error"]
+            logging.error(error)
+            return GetPromptResult(
+                description=f"Failed to find a {context}",
+                messages=[
+                    PromptMessage(
+                        role="user", 
+                        content=TextContent(type="text", text=str(error)),
+                    )
+                ]
+            )
+
+        logging.info(f"Get prompt: {output}")    
+        output_text = output['result']['output']
+        
+        # Handle potential Unicode characters
+        output_text = output_text.encode('utf-8', errors='replace').decode('utf-8')
+        
         return GetPromptResult(
-            description=f"Faild to find a {context}",
+            description=f"Found content for this {context}",
             messages=[
                 PromptMessage(
                     role="user", 
-                    content=TextContent(type="text", text=error),
+                    content=TextContent(type="text", text=output_text)
                 )
             ]
         )
-
-    logging.info(f"Get prompt: {output}")    
-    output = output['result']['output']
-    return GetPromptResult(
-        description=f"Found content for this {context}",
-        messages=[
-            PromptMessage(
-                role="user", 
-                content=TextContent(type="text", text=output)
-            )
-        ]
-    )
+    except Exception as e:
+        logging.error(f"Error processing prompt: {str(e)}")
+        raise McpError(INTERNAL_ERROR, f"Error processing prompt: {str(e)}")
 
 async def main():
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="minima",
-                server_version="0.0.1",
-                capabilities=server.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
+    try:
+        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+            await server.run(
+                read_stream,
+                write_stream,
+                InitializationOptions(
+                    server_name="minima",
+                    server_version="0.0.1",
+                    capabilities=server.get_capabilities(
+                        notification_options=NotificationOptions(),
+                        experimental_capabilities={},
+                    ),
                 ),
-            ),
-        )
+            )
+    except Exception as e:
+        logging.error(f"Server error: {str(e)}")
+        raise
