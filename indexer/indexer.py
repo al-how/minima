@@ -51,8 +51,9 @@ class Config:
     START_INDEXING = os.environ.get("START_INDEXING")
     LOCAL_FILES_PATH = os.environ.get("LOCAL_FILES_PATH")
     CONTAINER_PATH = os.environ.get("CONTAINER_PATH")
-    QDRANT_COLLECTION = "mnm_storage"
-    QDRANT_BOOTSTRAP = "qdrant"
+    QDRANT_COLLECTION = os.environ.get("REMOTE_QDRANT_COLLECTION", "mnm_storage")
+    QDRANT_BOOTSTRAP = os.environ.get("REMOTE_QDRANT_HOST", "qdrant")
+    QDRANT_PORT = int(os.environ.get("REMOTE_QDRANT_PORT", "6333"))
     EMBEDDING_MODEL_ID = os.environ.get("EMBEDDING_MODEL_ID")
     EMBEDDING_SIZE = os.environ.get("EMBEDDING_SIZE")
     
@@ -68,7 +69,10 @@ class Indexer:
         self.text_splitter = self._initialize_text_splitter()
 
     def _initialize_qdrant(self) -> QdrantClient:
-        return QdrantClient(host=self.config.QDRANT_BOOTSTRAP)
+        return QdrantClient(
+            host=self.config.QDRANT_BOOTSTRAP,
+            port=self.config.QDRANT_PORT
+        )
 
     def _initialize_embeddings(self) -> HuggingFaceEmbeddings:
         return HuggingFaceEmbeddings(

@@ -1,0 +1,27 @@
+# run with docker compose -f docker-compose-remote-qdrant.yml --env-file .env up --build
+version: '3.9'
+services:
+
+  indexer:
+    build: 
+      context: ./indexer
+      dockerfile: Dockerfile
+      args:
+        EMBEDDING_MODEL_ID: ${EMBEDDING_MODEL_ID}
+        EMBEDDING_SIZE: ${EMBEDDING_SIZE}
+    volumes:
+      - ${LOCAL_FILES_PATH}:/usr/src/app/local_files/
+      - ./indexer:/usr/src/app
+      - F:/minima/indexer_data:/indexer/storage
+    ports:
+      - 8001:8000
+    environment:
+      - PYTHONPATH=/usr/src
+      - PYTHONUNBUFFERED=TRUE
+      - LOCAL_FILES_PATH=${LOCAL_FILES_PATH}
+      - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID}
+      - EMBEDDING_SIZE=${EMBEDDING_SIZE}
+      - CONTAINER_PATH=/usr/src/app/local_files/
+      - REMOTE_QDRANT_HOST=${REMOTE_QDRANT_HOST}
+      - REMOTE_QDRANT_PORT=${REMOTE_QDRANT_PORT}
+      - REMOTE_QDRANT_COLLECTION=${REMOTE_QDRANT_COLLECTION}
