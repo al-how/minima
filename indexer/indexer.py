@@ -3,6 +3,8 @@ import uuid
 import torch
 import logging
 import time
+from datetime import datetime
+import yaml
 from dataclasses import dataclass
 from typing import List, Dict
 from pathlib import Path
@@ -12,6 +14,8 @@ from langchain_qdrant import QdrantVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from qdrant_client.http.models import Distance, VectorParams, Filter, FieldCondition, MatchValue
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders.text import TextLoader
+from langchain.schema import Document
 
 from langchain_community.document_loaders import (
     TextLoader,
@@ -27,6 +31,63 @@ from storage import MinimaStore, IndexingStatus
 logger = logging.getLogger(__name__)
 
 
+class MinimaTextLoader(TextLoader):
+    """Custom loader for Markdown files that extracts YAML frontmatter."""
+    
+    def __init__(self, file_path: str, **kwargs):
+        super().__init__(file_path, **kwargs)
+    
+    def _parse_frontmatter(self, content: str) -> tuple[dict, str]:
+        """Extract and parse YAML frontmatter from content."""
+        if not content.startswith('---\n'):
+            return {}, content
+            
+        # Find the end of frontmatter
+        parts = content.split('---\n', 2)
+        if len(parts) < 3:
+            return {}, content
+            
+        try:
+            frontmatter = yaml.safe_load(parts[1])
+            if not isinstance(frontmatter, dict):
+                return {}, content
+                
+            # Clean metadata dictionary
+            cleaned_frontmatter = {}
+            
+            # Handle dates specially
+            for key in ['created', 'updated']:
+                if key in frontmatter and frontmatter[key]:
+                    try:
+                        dt = datetime.fromisoformat(str(frontmatter[key]).replace(' ', 'T'))
+                        cleaned_frontmatter[key] = dt.isoformat()
+                    except ValueError:
+                        pass
+            
+            # Handle all other fields
+            for key, value in frontmatter.items():
+                if key not in ['created', 'updated']:  # Skip dates as we handled them above
+                    if value not in [None, '', [], {}]:  # Skip empty/null values
+                        cleaned_frontmatter[key] = value
+            
+            return cleaned_frontmatter, parts[2]
+        except yaml.YAMLError:
+            return {}, content
+    
+    def load(self) -> List[Document]:
+        """Load and process the file."""
+        with open(self.file_path, encoding=self.encoding) as f:
+            content = f.read()
+        
+        if self.file_path.endswith('.md'):
+            metadata, content = self._parse_frontmatter(content)
+        else:
+            metadata = {}
+            
+        metadata['file_path'] = self.file_path
+        
+        return [Document(page_content=content, metadata=metadata)]
+
 @dataclass
 class Config:
     EXTENSIONS_TO_LOADERS = {
@@ -38,7 +99,7 @@ class Config:
         ".docx": Docx2txtLoader,
         ".doc": Docx2txtLoader,
         ".txt": TextLoader,
-        ".md": TextLoader,
+        ".md": MinimaTextLoader,
         ".csv": CSVLoader,
     }
     
