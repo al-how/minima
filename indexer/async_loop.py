@@ -26,6 +26,8 @@ async def crawl_loop(async_queue):
         # Filter directories that should be ignored
         dirs[:] = [d for d in dirs if not should_ignore_path(os.path.join(root, d), ignore_patterns)]
         logger.info(f"Processing folder: {root}")
+        logger.info(f"Found directories: {dirs}")
+        logger.info(f"Found files: {files}")
         for file in files:
             path = os.path.join(root, file)
             
@@ -36,7 +38,7 @@ async def crawl_loop(async_queue):
                 
             # Skip files with unsupported extensions
             if not any(file.endswith(ext) for ext in AVAILABLE_EXTENSIONS):
-                logger.info(f"Skipping file: {file}")
+                logger.info(f"Skipping unsupported extension: {file} in {root}")
                 continue
             message = {
                 "path": path,
@@ -46,13 +48,16 @@ async def crawl_loop(async_queue):
             }
             existing_file_paths.append(path)
             async_queue.enqueue(message)
-            logger.info(f"File enqueue: {path}")
-        aggregate_message = {
-            "existing_file_paths": existing_file_paths,
-            "type": "all_files"
-        }
-        async_queue.enqueue(aggregate_message)
-        async_queue.enqueue({"type": "stop"})
+            logger.info(f"File enqueued: {path} with id {message['file_id']}")
+            logger.info(f"Queue size now: {async_queue.size()}")
+
+    # After processing all directories, send the aggregate and stop messages
+    aggregate_message = {
+        "existing_file_paths": existing_file_paths,
+        "type": "all_files"
+    }
+    async_queue.enqueue(aggregate_message)
+    async_queue.enqueue({"type": "stop"})
 
 
 async def index_loop(async_queue, indexer: Indexer):
