@@ -75,6 +75,32 @@ Explanation of Variables:
 
 **PASSWORD**: Put any password here, this is used to create a firebase account for the email specified above.
 
+### Text Chunking Configuration
+
+Minima provides several options to customize how documents are split into chunks for indexing:
+
+**CHUNK_SIZE**: Default chunk size (in characters) for text segmentation. Default: 500
+
+**CHUNK_OVERLAP**: Number of characters that should overlap between chunks. Default: 200
+
+**AUTO_CHUNKING**: When set to "true" (default), the system automatically uses optimized chunking strategies for different file types. Set to "false" to use a single strategy for all files.
+
+**DEFAULT_CHUNK_STRATEGY**: Default strategy to use when AUTO_CHUNKING is disabled. Options:
+  - `default`: Standard chunking based on paragraphs and sentences
+  - `markdown_aware`: Optimized for Markdown documents, respects headers and structure
+  - `sentence_aware`: Prioritizes keeping sentences intact
+
+**File-specific chunk sizes**:
+  - `MARKDOWN_CHUNK_SIZE`: Specific chunk size for markdown (.md) files
+  - `PDF_CHUNK_SIZE`: Specific chunk size for PDF files
+  - `DOC_CHUNK_SIZE`: Specific chunk size for Word documents (.doc, .docx)
+
+When AUTO_CHUNKING is enabled, the system applies these optimizations:
+- Markdown files (.md): Uses header-aware chunking that respects document structure
+- PDF files (.pdf): Uses paragraph-focused chunking with custom chunk size
+- Word documents (.doc, .docx): Uses paragraph-focused chunking with custom chunk size
+- Text files (.txt): Uses sentence-focused chunking to preserve meaning
+- Data files (.csv, .xls, .xlsx): Uses row-based chunking to keep data rows together
 
 Example of .env file for on-premises/local usage:
 ```
@@ -83,6 +109,14 @@ EMBEDDING_MODEL_ID=sentence-transformers/all-mpnet-base-v2
 EMBEDDING_SIZE=768
 OLLAMA_MODEL=qwen2:0.5b # must be LLM model id from Ollama models page
 RERANKER_MODEL=BAAI/bge-reranker-base # please, choose any BAAI reranker model
+
+# Chunking configuration (optional)
+CHUNK_SIZE=1000 # increase default chunk size to 1000 characters
+CHUNK_OVERLAP=200
+AUTO_CHUNKING=true # automatically use optimized strategies per file type
+DEFAULT_CHUNK_STRATEGY=default # only used when AUTO_CHUNKING=false
+MARKDOWN_CHUNK_SIZE=1500 # larger chunks for markdown files
+PDF_CHUNK_SIZE=800 # custom size for PDFs
 ```
 
 To use a chat ui, please navigate to **http://localhost:3000**

@@ -118,8 +118,17 @@ class Config:
     EMBEDDING_MODEL_ID = os.environ.get("EMBEDDING_MODEL_ID")
     EMBEDDING_SIZE = os.environ.get("EMBEDDING_SIZE")
     
-    CHUNK_SIZE = 500
-    CHUNK_OVERLAP = 200
+    # Chunking configuration
+    CHUNK_SIZE = int(os.environ.get("CHUNK_SIZE", "500"))
+    CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", "200"))
+    # Whether to use file-specific chunking strategies automatically
+    AUTO_CHUNKING = os.environ.get("AUTO_CHUNKING", "true").lower() == "true"
+    # Default strategy if AUTO_CHUNKING is disabled
+    DEFAULT_CHUNK_STRATEGY = os.environ.get("DEFAULT_CHUNK_STRATEGY", "default")
+    # File-specific chunking sizes
+    MARKDOWN_CHUNK_SIZE = int(os.environ.get("MARKDOWN_CHUNK_SIZE", str(CHUNK_SIZE)))
+    PDF_CHUNK_SIZE = int(os.environ.get("PDF_CHUNK_SIZE", str(CHUNK_SIZE)))
+    DOC_CHUNK_SIZE = int(os.environ.get("DOC_CHUNK_SIZE", str(CHUNK_SIZE)))
 
 class Indexer:
     def __init__(self):
@@ -143,9 +152,21 @@ class Indexer:
         )
 
     def _initialize_text_splitter(self) -> RecursiveCharacterTextSplitter:
+        # Default separator hierarchy for RecursiveCharacterTextSplitter
+        separators = ["\n\n", "\n", ". ", "! ", "? ", ";", ",", " ", ""]
+        
+        # Choose chunking strategy based on default configuration
+        if self.config.DEFAULT_CHUNK_STRATEGY.lower() == "markdown_aware":
+            # Optimized for Markdown - prioritize headers and paragraph breaks
+            separators = ["\n## ", "\n### ", "\n#### ", "\n##### ", "\n###### ", "\n\n", "\n", ". ", " ", ""]
+        elif self.config.DEFAULT_CHUNK_STRATEGY.lower() == "sentence_aware":
+            # Prioritize sentence boundaries
+            separators = [". ", "! ", "? ", "\n\n", "\n", "; ", ", ", " ", ""]
+        
         return RecursiveCharacterTextSplitter(
             chunk_size=self.config.CHUNK_SIZE,
-            chunk_overlap=self.config.CHUNK_OVERLAP
+            chunk_overlap=self.config.CHUNK_OVERLAP,
+            separators=separators
         )
 
     def _setup_collection(self) -> QdrantVectorStore:
@@ -177,9 +198,60 @@ class Indexer:
         
         return loader_class(file_path=file_path)
 
+    def _get_file_specific_splitter(self, file_path: str) -> RecursiveCharacterTextSplitter:
+        """Create a text splitter optimized for a specific file type."""
+        file_extension = Path(file_path).suffix.lower()
+        chunk_size = self.config.CHUNK_SIZE
+        
+        # Define default separators
+        separators = ["\n\n", "\n", ". ", "! ", "? ", ";", ",", " ", ""]
+        
+        # If AUTO_CHUNKING is enabled, select strategy based on file type
+        if self.config.AUTO_CHUNKING:
+            if file_extension == ".md":
+                # Markdown-specific strategy
+                chunk_size = self.config.MARKDOWN_CHUNK_SIZE
+                separators = ["\n## ", "\n### ", "\n#### ", "\n##### ", "\n###### ", "\n\n", "\n", ". ", " ", ""]
+                logger.debug(f"Using markdown-aware chunking for {file_path}")
+            elif file_extension == ".pdf":
+                # PDF-specific strategy
+                chunk_size = self.config.PDF_CHUNK_SIZE
+                separators = ["\n\n", "\n", ". ", "! ", "? ", ";", ",", " ", ""]
+                logger.debug(f"Using PDF-specific chunking for {file_path}")
+            elif file_extension in [".doc", ".docx"]:
+                # Word document strategy
+                chunk_size = self.config.DOC_CHUNK_SIZE
+                separators = ["\n\n", "\n", ". ", "! ", "? ", ";", ",", " ", ""]
+                logger.debug(f"Using DOC-specific chunking for {file_path}")
+            elif file_extension in [".txt"]:
+                # Text file strategy - sentence-focused
+                separators = [". ", "! ", "? ", "\n\n", "\n", "; ", ", ", " ", ""]
+                logger.debug(f"Using sentence-aware chunking for {file_path}")
+            elif file_extension in [".csv", ".xls", ".xlsx"]:
+                # Data file strategy - keep rows together when possible
+                separators = ["\n", ",", ";", "\t", " ", ""]
+                logger.debug(f"Using data-aware chunking for {file_path}")
+        else:
+            # Apply file-specific chunk sizes but use default separators
+            if file_extension == ".md":
+                chunk_size = self.config.MARKDOWN_CHUNK_SIZE
+            elif file_extension == ".pdf":
+                chunk_size = self.config.PDF_CHUNK_SIZE
+            elif file_extension in [".doc", ".docx"]:
+                chunk_size = self.config.DOC_CHUNK_SIZE
+                
+        return RecursiveCharacterTextSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=self.config.CHUNK_OVERLAP,
+            separators=separators
+        )
+
     def _process_file(self, loader) -> List[str]:
         try:
-            documents = loader.load_and_split(self.text_splitter)
+            # Create a file-specific text splitter with appropriate strategy and size
+            text_splitter = self._get_file_specific_splitter(loader.file_path)
+                
+            documents = loader.load_and_split(text_splitter)
             if not documents:
                 logger.warning(f"No documents loaded from {loader.file_path}")
                 return []
