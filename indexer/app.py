@@ -1,32 +1,33 @@
 import nltk
 import logging
 import asyncio
-from indexer import Indexer
 from pydantic import BaseModel
-from storage import MinimaStore
 from async_queue import AsyncQueue
 from fastapi import FastAPI, APIRouter
 from contextlib import asynccontextmanager
 from fastapi_utilities import repeat_every
 from async_loop import index_loop, crawl_loop
 
+# Import from our centralized imports module
+from db_store import MinimaStore
+from indexer import Indexer
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize the refactored Indexer with default configuration
 indexer = Indexer()
 router = APIRouter()
 async_queue = AsyncQueue()
 MinimaStore.create_db_and_tables()
 
-def init_loader_dependencies():
-    nltk.download('punkt')
-    nltk.download('punkt_tab')
-    nltk.download('wordnet')
-    nltk.download('omw-1.4')
-    nltk.download('punkt')
-    nltk.download('averaged_perceptron_tagger_eng')
-
-init_loader_dependencies()
+# Initialize dependencies
+nltk.download('punkt')
+nltk.download('punkt_tab')
+nltk.download('wordnet')
+nltk.download('omw-1.4')
+nltk.download('punkt')  # Duplicate but keeping for safety
+nltk.download('averaged_perceptron_tagger_eng')
 
 class Query(BaseModel):
     query: str
@@ -37,10 +38,10 @@ class Query(BaseModel):
     response_description='Query local data storage',
 )
 async def query(request: Query):
-    logger.info(f"Received query: {query}")
+    logger.info(f"Received query: {request.query}")
     try:
         result = indexer.find(request.query)
-        logger.info(f"Found {len(result)} results for query: {query}")
+        logger.info(f"Found {len(result)} results for query: {request.query}")
         logger.info(f"Results: {result}")
         return {"result": result}
     except Exception as e:

@@ -16,7 +16,7 @@ services:
     ports:
       - 8001:8000
     environment:
-      - PYTHONPATH=/usr/src
+      - PYTHONPATH=/usr/src/app
       - PYTHONUNBUFFERED=TRUE
       - LOCAL_FILES_PATH=${LOCAL_FILES_PATH}
       - EMBEDDING_MODEL_ID=${EMBEDDING_MODEL_ID}
